@@ -52,6 +52,9 @@ static const uchar popCountTable4[] =
 
 int normHamming(const uchar* a, int n, int cellSize)
 {
+    int output;
+    CALL_HAL_RET(normHamming8u, cv_hal_normHamming8u, output, a, n, cellSize);
+
     if( cellSize == 1 )
         return normHamming(a, n);
     const uchar* tab = 0;
@@ -98,6 +101,9 @@ int normHamming(const uchar* a, int n, int cellSize)
 
 int normHamming(const uchar* a, const uchar* b, int n, int cellSize)
 {
+    int output;
+    CALL_HAL_RET(normHammingDiff8u, cv_hal_normHammingDiff8u, output, a, b, n, cellSize);
+
     if( cellSize == 1 )
         return normHamming(a, b, n);
     const uchar* tab = 0;
@@ -570,7 +576,10 @@ static bool ipp_norm(Mat &src, int normType, Mat &mask, double &result)
                 type == CV_16SC1 ? (ippiNormFuncNoHint)ippiNorm_L1_16s_C1R :
                 0) :
                 normType == NORM_L2 || normType == NORM_L2SQR ?
-                (type == CV_8UC1 ? (ippiNormFuncNoHint)ippiNorm_L2_8u_C1R :
+                (
+                #if !IPP_DISABLE_NORM_8U
+                type == CV_8UC1 ? (ippiNormFuncNoHint)ippiNorm_L2_8u_C1R :
+                #endif
                 type == CV_16UC1 ? (ippiNormFuncNoHint)ippiNorm_L2_16u_C1R :
                 type == CV_16SC1 ? (ippiNormFuncNoHint)ippiNorm_L2_16s_C1R :
                 0) : 0;
@@ -752,7 +761,7 @@ double norm( InputArray _src, int normType, InputArray _mask )
             for (int j = 0; j < total; j += blockSize)
             {
                 int bsz = std::min(total - j, blockSize);
-                hal::cvt16f32f((const float16_t*)ptrs[0], data0, bsz * cn);
+                hal::cvt16f32f((const hfloat*)ptrs[0], data0, bsz * cn);
                 func((uchar*)data0, ptrs[1], (uchar*)&result.f, bsz, cn);
                 ptrs[0] += bsz*esz;
                 if (ptrs[1])
@@ -909,18 +918,27 @@ static bool ipp_norm(InputArray _src1, InputArray _src2, int normType, InputArra
                     0) : 0;
                 ippiNormRelFuncNoHint ippiNormRel =
                     normType == NORM_INF ?
-                    (type == CV_8U ? (ippiNormRelFuncNoHint)ippiNormRel_Inf_8u_C1R :
+                    (
+                    #if !IPP_DISABLE_NORM_8U
+                    type == CV_8U ? (ippiNormRelFuncNoHint)ippiNormRel_Inf_8u_C1R :
+                    #endif
                     type == CV_16U ? (ippiNormRelFuncNoHint)ippiNormRel_Inf_16u_C1R :
                     type == CV_16S ? (ippiNormRelFuncNoHint)ippiNormRel_Inf_16s_C1R :
                     type == CV_32F ? (ippiNormRelFuncNoHint)ippiNormRel_Inf_32f_C1R :
                     0) :
                     normType == NORM_L1 ?
-                    (type == CV_8U ? (ippiNormRelFuncNoHint)ippiNormRel_L1_8u_C1R :
+                    (
+                    #if !IPP_DISABLE_NORM_8U
+                    type == CV_8U ? (ippiNormRelFuncNoHint)ippiNormRel_L1_8u_C1R :
+                    #endif
                     type == CV_16U ? (ippiNormRelFuncNoHint)ippiNormRel_L1_16u_C1R :
                     type == CV_16S ? (ippiNormRelFuncNoHint)ippiNormRel_L1_16s_C1R :
                     0) :
                     normType == NORM_L2 || normType == NORM_L2SQR ?
-                    (type == CV_8U ? (ippiNormRelFuncNoHint)ippiNormRel_L2_8u_C1R :
+                    (
+                    #if !IPP_DISABLE_NORM_8U
+                    type == CV_8U ? (ippiNormRelFuncNoHint)ippiNormRel_L2_8u_C1R :
+                    #endif
                     type == CV_16U ? (ippiNormRelFuncNoHint)ippiNormRel_L2_16u_C1R :
                     type == CV_16S ? (ippiNormRelFuncNoHint)ippiNormRel_L2_16s_C1R :
                     0) : 0;
@@ -1028,18 +1046,27 @@ static bool ipp_norm(InputArray _src1, InputArray _src2, int normType, InputArra
                 0) : 0;
             ippiNormDiffFuncNoHint ippiNormDiff =
                 normType == NORM_INF ?
-                (type == CV_8U ? (ippiNormDiffFuncNoHint)ippiNormDiff_Inf_8u_C1R :
+                (
+                #if !IPP_DISABLE_NORM_8U
+                type == CV_8U ? (ippiNormDiffFuncNoHint)ippiNormDiff_Inf_8u_C1R :
+                #endif
                 type == CV_16U ? (ippiNormDiffFuncNoHint)ippiNormDiff_Inf_16u_C1R :
                 type == CV_16S ? (ippiNormDiffFuncNoHint)ippiNormDiff_Inf_16s_C1R :
                 type == CV_32F ? (ippiNormDiffFuncNoHint)ippiNormDiff_Inf_32f_C1R :
                 0) :
                 normType == NORM_L1 ?
-                (type == CV_8U ? (ippiNormDiffFuncNoHint)ippiNormDiff_L1_8u_C1R :
+                (
+                #if !IPP_DISABLE_NORM_8U
+                type == CV_8U ? (ippiNormDiffFuncNoHint)ippiNormDiff_L1_8u_C1R :
+                #endif
                 type == CV_16U ? (ippiNormDiffFuncNoHint)ippiNormDiff_L1_16u_C1R :
                 type == CV_16S ? (ippiNormDiffFuncNoHint)ippiNormDiff_L1_16s_C1R :
                 0) :
                 normType == NORM_L2 || normType == NORM_L2SQR ?
-                (type == CV_8U ? (ippiNormDiffFuncNoHint)ippiNormDiff_L2_8u_C1R :
+                (
+                #if !IPP_DISABLE_NORM_8U
+                type == CV_8U ? (ippiNormDiffFuncNoHint)ippiNormDiff_L2_8u_C1R :
+                #endif
                 type == CV_16U ? (ippiNormDiffFuncNoHint)ippiNormDiff_L2_16u_C1R :
                 type == CV_16S ? (ippiNormDiffFuncNoHint)ippiNormDiff_L2_16s_C1R :
                 0) : 0;
@@ -1222,8 +1249,8 @@ double norm( InputArray _src1, InputArray _src2, int normType, InputArray _mask 
             for (int j = 0; j < total; j += blockSize)
             {
                 int bsz = std::min(total - j, blockSize);
-                hal::cvt16f32f((const float16_t*)ptrs[0], data0, bsz * cn);
-                hal::cvt16f32f((const float16_t*)ptrs[1], data1, bsz * cn);
+                hal::cvt16f32f((const hfloat*)ptrs[0], data0, bsz * cn);
+                hal::cvt16f32f((const hfloat*)ptrs[1], data1, bsz * cn);
                 func((uchar*)data0, (uchar*)data1, ptrs[2], (uchar*)&result.f, bsz, cn);
                 ptrs[0] += bsz*esz;
                 ptrs[1] += bsz*esz;
@@ -1392,7 +1419,7 @@ void normalize(InputArray _src, InputOutputArray _dst, double a, double b,
         shift = 0;
     }
     else
-        CV_Error( CV_StsBadArg, "Unknown/unsupported norm type" );
+        CV_Error( cv::Error::StsBadArg, "Unknown/unsupported norm type" );
 
     CV_OCL_RUN(_dst.isUMat(),
                ocl_normalize(_src, _dst, _mask, rtype, scale, shift))
