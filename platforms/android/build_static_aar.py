@@ -7,7 +7,7 @@ import os
 import shutil
 import subprocess
 
-from build_java_shared_aar import cleanup, fill_template, get_compiled_aar_path, get_opencv_version
+from build_java_shared_aar import cleanup, fill_template, get_compiled_aar_path, get_opencv_version, get_ndk_version
 
 
 ANDROID_PROJECT_TEMPLATE_DIR = path.join(path.dirname(__file__), "aar-template")
@@ -103,6 +103,8 @@ def convert_deps_list_to_prefab(linked_libs, opencv_libs, external_libs):
 
 def main(args):
     opencv_version = get_opencv_version(args.opencv_sdk_path)
+    ndk_version = get_ndk_version(args.ndk_location)
+    print("Detected ndk_version:", ndk_version)
     abis = os.listdir(path.join(args.opencv_sdk_path, "sdk/native/libs"))
     final_aar_path = FINAL_AAR_PATH_TEMPLATE.replace("<OPENCV_VERSION>", opencv_version)
     sdk_dir = args.opencv_sdk_path
@@ -121,6 +123,7 @@ def main(args):
                    "LIB_TYPE": "c++_static",
                    "PACKAGE_NAME": MAVEN_PACKAGE_NAME,
                    "OPENCV_VERSION": opencv_version,
+                   "NDK_VERSION": ndk_version,
                    "COMPILE_SDK": args.android_compile_sdk,
                    "MIN_SDK": args.android_min_sdk,
                    "TARGET_SDK": args.android_target_sdk,
@@ -131,17 +134,27 @@ def main(args):
                   path.join(ANDROID_PROJECT_DIR, "OpenCV/src/main/cpp/CMakeLists.txt"),
                   {"LIB_NAME": "templib", "LIB_TYPE": "STATIC"})
 
+    local_props = ""
+    if args.ndk_location:
+        local_props += "ndk.dir=" + args.ndk_location + "\n"
+    if args.cmake_location:
+        local_props += "cmake.dir=" + args.cmake_location + "\n"
+
+    if local_props:
+        with open(path.join(ANDROID_PROJECT_DIR, "local.properties"), "wt") as f:
+            f.write(local_props)
+
     opencv_libs = get_list_of_opencv_libs(sdk_dir)
     external_libs = get_list_of_3rdparty_libs(sdk_dir, abis)
 
     add_printing_linked_libs(sdk_dir, opencv_libs)
 
     print("Running gradle assembleRelease...")
+    cmd = ["./gradlew", "assembleRelease"]
+    if args.offline:
+        cmd = cmd + ["--offline"]
     # Running gradle to build the Android project
-    subprocess.run(["./gradlew", "assembleRelease"],
-                shell=False,
-                cwd=ANDROID_PROJECT_DIR,
-                check=True)
+    subprocess.run(cmd, shell=False, cwd=ANDROID_PROJECT_DIR, check=True)
 
     # The created AAR package contains only one empty libtemplib.a library.
     # We need to add OpenCV libraries manually.
@@ -206,24 +219,40 @@ def main(args):
 
     shutil.copy(final_aar_path, path.join(ANDROID_PROJECT_DIR, "OpenCV/opencv-release.aar"))
 
-    subprocess.run(["./gradlew", "publishReleasePublicationToMyrepoRepository"],
-            shell=False,
-            cwd=ANDROID_PROJECT_DIR,
-            check=True)
+    print("Creating a maven repo from project sources (with sources jar and javadoc jar)...")
+    cmd = ["./gradlew", "publishReleasePublicationToMyrepoRepository"]
+    if args.offline:
+        cmd = cmd + ["--offline"]
+    subprocess.run(cmd, shell=False, cwd=ANDROID_PROJECT_DIR, check=True)
 
     os.makedirs(path.join(FINAL_REPO_PATH, "org/opencv"), exist_ok=True)
     shutil.move(path.join(ANDROID_PROJECT_DIR, "OpenCV/build/repo/org/opencv", MAVEN_PACKAGE_NAME),
                 path.join(FINAL_REPO_PATH, "org/opencv", MAVEN_PACKAGE_NAME))
+
+    print("Creating a maven repo from modified AAR (with cpp libraries)...")
+    cmd = ["./gradlew", "publishModifiedPublicationToMyrepoRepository"]
+    if args.offline:
+        cmd = cmd + ["--offline"]
+    subprocess.run(cmd, shell=False, cwd=ANDROID_PROJECT_DIR, check=True)
+
+    # Replacing AAR from the first maven repo with modified AAR from the second maven repo
+    shutil.copytree(path.join(ANDROID_PROJECT_DIR, "OpenCV/build/repo/org/opencv", MAVEN_PACKAGE_NAME),
+                    path.join(FINAL_REPO_PATH, "org/opencv", MAVEN_PACKAGE_NAME),
+                    dirs_exist_ok=True)
+
     print("Done")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Builds AAR with static C++ libs from OpenCV SDK")
     parser.add_argument('opencv_sdk_path')
-    parser.add_argument('--android_compile_sdk', default="26")
+    parser.add_argument('--android_compile_sdk', default="34")
     parser.add_argument('--android_min_sdk', default="21")
-    parser.add_argument('--android_target_sdk', default="26")
+    parser.add_argument('--android_target_sdk', default="34")
     parser.add_argument('--java_version', default="1_8")
+    parser.add_argument('--ndk_location', default="")
+    parser.add_argument('--cmake_location', default="")
+    parser.add_argument('--offline', action="store_true", help="Force Gradle use offline mode")
     args = parser.parse_args()
 
     main(args)
